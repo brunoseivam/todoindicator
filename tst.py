@@ -8,6 +8,7 @@ import pyinotify as pi
 FILENAME    = "todo_list"
 CHECKPERIOD = 100      # 0.1 second
 
+# Fires an action when FILENAME file changes
 class EvHandler(pi.ProcessEvent):
     def __init__(self, action):
         pi.ProcessEvent.__init__(self)
@@ -17,39 +18,44 @@ class EvHandler(pi.ProcessEvent):
         if event.name == FILENAME:
             self.action()
 
+# App class
 class ToDoIndicator():
+    # Create needed objects and load database
     def __init__(self):
         self.items    = None
         self.wm       = pi.WatchManager()
-        self.handler  = EvHandler(self.load)
-        self.notifier = pi.Notifier(self.wm, EvHandler(self.load), timeout = 10) # Msecs
+        self.notifier = pi.Notifier(self.wm, EvHandler(self.load), timeout = 10)
 
+        # Watch current dir
         self.wm.add_watch(".", pi.IN_CLOSE_WRITE)
-        self.ind = ai.Indicator("todo-list", os.getcwd()+"/icon.png",\
+        self.ind = ai.Indicator("todo-indicator", os.getcwd()+"/icon.png",\
                                ai.CATEGORY_APPLICATION_STATUS)
         self.ind.set_status(ai.STATUS_ACTIVE)
 
         self.load()
 
+    # Run GTK main loop
     def run(self):
         gtk.timeout_add(CHECKPERIOD, self.check)
         gtk.main()
 
+    # Open an editor to edit the database
     def edit(self, item):
         os.system("gedit {}&".format(FILENAME))
 
+    # Load the database as menu items
     def load(self):
         with open(FILENAME) as f:
-            rItems = [l.strip().split(";") for l in f]
+            rItems = [l.strip().split(";") for l in f] # RAW Items
 
         self.items = [[done.lower() == 'yes',desc] for done,desc in rItems]
 
         menu = gtk.Menu()
         for i in self.items:
             if i[0]:
-                labelFmt = u"\u2611 {}"
+                labelFmt = u"\u2611 {}" # \u2611 = checked checkbox
             else:
-                labelFmt = u"\u2610 {}"
+                labelFmt = u"\u2610 {}" # \u2610 = unchecked checkbox
 
             menuItem = gtk.MenuItem(labelFmt.format(i[1]))
             menuItem.refItem = i
@@ -73,6 +79,7 @@ class ToDoIndicator():
         menu.append(qItem)
         self.ind.set_menu(menu)
 
+    # Commit changes to the database
     def save(self):
         if self.items:
             with open(FILENAME, 'w') as f:
@@ -80,6 +87,7 @@ class ToDoIndicator():
                     d = "Yes" if done else "No"
                     f.write("{};{}\n".format(d,desc))
 
+    # Check for database changes (run periodically)
     def check(self):
         self.notifier.process_events()
         while self.notifier.check_events():
@@ -87,11 +95,12 @@ class ToDoIndicator():
             self.notifier.process_events()
         return True
 
+    # Toggle state of clicked item
     def click(self, item):
         item.refItem[0] = not item.refItem[0]
         self.save()
-        #print item.get_label(), item.refItem
 
+    # Exit application
     def quit(self, item):
         sys.exit(0)
 
